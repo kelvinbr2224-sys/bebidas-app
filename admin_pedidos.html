@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BebidasApp - Painel de Pedidos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <h1>📋 Painel de Pedidos</h1>
+    <div>
+      <a href="admin.html" class="btn-sair" style="text-decoration: none;">⚙️ Produtos</a>
+      <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Filtros de status -->
+    <div style="margin-bottom: 25px; display: flex; gap: 8px; flex-wrap: wrap;">
+      <button class="aba ativa" onclick="filtrarStatus('todos', this)">Todos</button>
+      <button class="aba" onclick="filtrarStatus('pendente', this)">⏳ Pendentes</button>
+      <button class="aba" onclick="filtrarStatus('aceito', this)">✅ Aceitos</button>
+      <button class="aba" onclick="filtrarStatus('preparando', this)">📦 Preparando</button>
+      <button class="aba" onclick="filtrarStatus('saiu_entrega', this)">🚚 Em entrega</button>
+      <button class="aba" onclick="filtrarStatus('entregue', this)">✅ Entregues</button>
+    </div>
+
+    <!-- Contadores -->
+    <div id="contadores" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 25px;"></div>
+
+    <!-- Lista de pedidos -->
+    <div id="listaPedidos">
+      <p style="text-align: center; color: #888;">Carregando pedidos...</p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    let todosPedidos = [];
+    let statusAtual = "todos";
+
+    auth.onAuthStateChanged(function(user) {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      carregarPedidos();
+    });
+
+    // ========== CARREGAR TODOS OS PEDIDOS ==========
+    function carregarPedidos() {
+      // ⚠️ SEM orderBy para não precisar de índice composto
+      db.collection("pedidos").get()
+        .then(function(snapshot) {
+          todosPedidos = [];
+          snapshot.forEach(function(doc) {
+            todosPedidos.push({ id: doc.id, dados: doc.data() });
+          });
+
+          // Ordena por data (mais recente primeiro) no JavaScript
+          todosPedidos.sort(function(a, b) {
+            return new Date(b.dados.criadoEm) - new Date(a.dados.criadoEm);
+          });
+
+          atualizarContadores();
+          renderizarPedidos();
+        })
+        .catch(function(erro) {
+          console.error(erro);
+          document.getElementById("listaPedidos").innerHTML =
+            '<p style="text-align: center; color: #c0392b;">Erro: ' + erro.message + '</p>';
+        });
+    }
+
+    // ========== CONTADORES ==========
+    function atualizarContadores() {
+      const contagem = {
+        pendente: 0,
+        aceito: 0,
+        preparando: 0,
+        saiu_entrega: 0,
+        entregue: 0
+      };
+      todosPedidos.forEach(function(p) {
+        if (contagem[p.dados.status] !== undefined) {
+          contagem[p.dados.status]++;
+        }
+      });
+
+      document.getElementById("contadores").innerHTML = `
+        <div style="background: #f39c12; padding: 12px; border-radius: 10px; text-align: center;">
+          <p style="color: #fff; font-size: 12px; font-weight: bold;">⏳ PENDENTES</p>
+          <p style="color: #fff; font-size: 24px; font-weight: bold;">${contagem.pendente}</p>
+        </div>
+        <div style="background: #3498db; padding: 12px; border-radius: 10px; text-align: center;">
+          <p style="color: #fff; font-size: 12px; font-weight: bold;">✅ ACEITOS</p>
+          <p style="color: #fff; font-size: 24px; font-weight: bold;">${contagem.aceito}</p>
+        </div>
+        <div style="background: #9b59b6; padding: 12px; border-radius: 10px; text-align: center;">
+          <p style="color: #fff; font-size: 12px; font-weight: bold;">📦 PREPARANDO</p>
+          <p style="color: #fff; font-size: 24px; font-weight: bold;">${contagem.preparando}</p>
+        </div>
+        <div style="background: #e67e22; padding: 12px; border-radius: 10px; text-align: center;">
+          <p style="color: #fff; font-size: 12px; font-weight: bold;">🚚 EM ENTREGA</p>
+          <p style="color: #fff; font-size: 24px; font-weight: bold;">${contagem.saiu_entrega}</p>
+        </div>
+        <div style="background: #27ae60; padding: 12px; border-radius: 10px; text-align: center;">
+          <p style="color: #fff; font-size: 12px; font-weight: bold;">✅ ENTREGUES</p>
+          <p style="color: #fff; font-size: 24px; font-weight: bold;">${contagem.entregue}</p>
+        </div>
+      `;
+    }
+
+    // ========== FILTRO ==========
+    function filtrarStatus(status, botao) {
+      statusAtual = status;
+      document.querySelectorAll(".aba").forEach(function(b) { b.classList.remove("ativa"); });
+      botao.classList.add("ativa");
+      renderizarPedidos();
+    }
+
+    // ========== RENDERIZAR PEDIDOS ==========
+    function renderizarPedidos() {
+      const lista = document.getElementById("listaPedidos");
+
+      let filtrados = todosPedidos;
+      if (statusAtual !== "todos") {
+        filtrados = todosPedidos.filter(function(p) { return p.dados.status === statusAtual; });
+      }
+
+      if (filtrados.length === 0) {
+        lista.innerHTML = '<p style="text-align: center; color: #888; padding: 40px;">Nenhum pedido nesta categoria.</p>';
+        return;
+      }
+
+      let html = "";
+      filtrados.forEach(function(item) {
+        const p = item.dados;
+        const data = new Date(p.criadoEm).toLocaleString("pt-BR");
+
+        const corStatus = {
+          "pendente": "#f39c12",
+          "aceito": "#3498db",
+          "preparando": "#9b59b6",
+          "saiu_entrega": "#e67e22",
+          "entregue": "#27ae60",
+          "cancelado": "#c0392b"
+        }[p.status] || "#888";
+
+        const textoStatus = {
+          "pendente": "⏳ Pendente",
+          "aceito": "✅ Aceito",
+          "preparando": "📦 Preparando",
+          "saiu_entrega": "🚚 Saiu para entrega",
+          "entregue": "✅ Entregue",
+          "cancelado": "❌ Cancelado"
+        }[p.status] || p.status;
+
+        // Botões de ação conforme o status
+        let botoesAcao = "";
+        if (p.status === "pendente") {
+          botoesAcao = `
+            <button class="btn btn-primario" style="padding: 8px; font-size: 14px;" onclick="alterarStatus('${item.id}', 'aceito')">✅ Aceitar</button>
+            <button class="btn btn-perigo" style="padding: 8px; font-size: 14px;" onclick="alterarStatus('${item.id}', 'cancelado')">❌ Recusar</button>
+          `;
+        } else if (p.status === "aceito") {
+          botoesAcao = `
+            <button class="btn btn-primario" style="padding: 8px; font-size: 14px;" onclick="alterarStatus('${item.id}', 'preparando')">📦 Preparando</button>
+          `;
+        } else if (p.status === "preparando") {
+          botoesAcao = `
+            <button class="btn btn-primario" style="padding: 8px; font-size: 14px;" onclick="alterarStatus('${item.id}', 'saiu_entrega')">🚚 Saiu para entrega</button>
+          `;
+        } else if (p.status === "saiu_entrega") {
+          botoesAcao = `
+            <button class="btn btn-primario" style="padding: 8px; font-size: 14px;" onclick="alterarStatus('${item.id}', 'entregue')">✅ Entregue</button>
+          `;
+        }
+
+        html += `
+          <div style="background: #1e1e1e; border: 1px solid #2a2a2a; border-left: 4px solid ${corStatus}; border-radius: 12px; padding: 18px; margin-bottom: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <strong style="color: #f5f5f5; font-size: 16px;">Pedido #${item.id.substring(0, 6).toUpperCase()}</strong>
+                <p style="color: #888; font-size: 12px; margin-top: 3px;">${data}</p>
+              </div>
+              <span style="background: ${corStatus}; color: white; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold;">
+                ${textoStatus}
+              </span>
+            </div>
+
+            <div style="background: #2a2a2a; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+              <p style="color: #f1c40f; font-size: 14px; font-weight: bold; margin-bottom: 6px;">👤 Cliente</p>
+              <p style="color: #ccc; font-size: 14px;">${p.clienteNome}</p>
+              <p style="color: #888; font-size: 13px;">📱 ${p.clienteTelefone || "Não informado"}</p>
+              <p style="color: #888; font-size: 13px;">✉️ ${p.clienteEmail || ""}</p>
+            </div>
+
+            <div style="border-top: 1px solid #2a2a2a; padding-top: 12px; margin-bottom: 12px;">
+              ${p.itens.map(function(it) {
+                return `<p style="color: #ccc; font-size: 14px; margin-bottom: 4px;">${it.qtd}x ${it.nome} — ${formatarPreco(it.subtotal)}</p>`;
+              }).join("")}
+            </div>
+
+            <p style="color: #f1c40f; font-size: 22px; font-weight: bold; text-align: right; margin-bottom: 12px;">
+              Total: ${formatarPreco(p.total)}
+            </p>
+
+            <div style="background: #2a2a2a; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+              <p style="color: #f1c40f; font-size: 14px; font-weight: bold; margin-bottom: 6px;">📍 Endereço de entrega</p>
+              <p style="color: #ccc; font-size: 14px;">${p.endereco.rua}, ${p.endereco.numero}</p>
+              ${p.endereco.complemento ? '<p style="color: #888; font-size: 13px;">' + p.endereco.complemento + '</p>' : ''}
+              <p style="color: #888; font-size: 13px;">Bairro: ${p.endereco.bairro}</p>
+              ${p.endereco.observacoes ? '<p style="color: #f39c12; font-size: 13px; margin-top: 6px;">📝 ' + p.endereco.observacoes + '</p>' : ''}
+            </div>
+
+            <p style="color: #888; font-size: 13px; margin-bottom: 12px;">💳 Pagamento: <strong style="color: #f5f5f5;">${p.formaPagamento}</strong></p>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              ${botoesAcao}
+            </div>
+          </div>
+        `;
+      });
+      lista.innerHTML = html;
+    }
+
+    // ========== ALTERAR STATUS ==========
+    function alterarStatus(pedidoId, novoStatus) {
+      db.collection("pedidos").doc(pedidoId).update({
+        status: novoStatus,
+        atualizadoEm: new Date().toISOString()
+      })
+      .then(function() {
+        mostrarToast("Status atualizado!", "sucesso");
+        carregarPedidos();
+      })
+      .catch(function(erro) {
+        console.error(erro);
+        alert("Erro ao atualizar: " + erro.message);
+      });
+    }
+  </script>
+
+</body>
+</html>

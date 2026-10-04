@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BebidasApp - Meus Pedidos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <h1>📦 Meus Pedidos</h1>
+    <div>
+      <a href="catalogo.html" class="btn-sair" style="text-decoration: none;">← Catálogo</a>
+      <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="listaPedidos">
+      <p style="text-align: center; color: #888;">Carregando pedidos...</p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    auth.onAuthStateChanged(function(user) {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      carregarPedidos(user.uid);
+    });
+
+    function carregarPedidos(uid) {
+      // ⚠️ SEM orderBy para não precisar de índice composto
+      db.collection("pedidos")
+        .where("clienteId", "==", uid)
+        .get()
+        .then(function(snapshot) {
+          const lista = document.getElementById("listaPedidos");
+
+          if (snapshot.empty) {
+            lista.innerHTML = `
+              <div style="text-align: center; padding: 60px 20px;">
+                <p style="font-size: 60px; margin-bottom: 20px;">📦</p>
+                <p style="color: #888; font-size: 18px; margin-bottom: 20px;">Você ainda não fez nenhum pedido</p>
+                <a href="catalogo.html" class="btn btn-primario" style="text-decoration: none; display: inline-block; max-width: 250px;">Ver produtos</a>
+              </div>
+            `;
+            return;
+          }
+
+          // Converte em array
+          const pedidos = [];
+          snapshot.forEach(function(doc) {
+            pedidos.push({ id: doc.id, dados: doc.data() });
+          });
+
+          // Ordena por data (mais recente primeiro) — no JavaScript, sem índice
+          pedidos.sort(function(a, b) {
+            return new Date(b.dados.criadoEm) - new Date(a.dados.criadoEm);
+          });
+
+          let html = "";
+          pedidos.forEach(function(item) {
+            const p = item.dados;
+            const data = new Date(p.criadoEm).toLocaleString("pt-BR");
+
+            const corStatus = {
+              "pendente": "#f39c12",
+              "aceito": "#3498db",
+              "preparando": "#9b59b6",
+              "saiu_entrega": "#e67e22",
+              "entregue": "#27ae60",
+              "cancelado": "#c0392b"
+            }[p.status] || "#888";
+
+            const textoStatus = {
+              "pendente": "⏳ Pendente",
+              "aceito": "✅ Aceito",
+              "preparando": "📦 Preparando",
+              "saiu_entrega": "🚚 Saiu para entrega",
+              "entregue": "✅ Entregue",
+              "cancelado": "❌ Cancelado"
+            }[p.status] || p.status;
+
+            html += `
+              <div style="background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 12px; padding: 18px; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                  <div>
+                    <strong style="color: #f5f5f5;">Pedido #${item.id.substring(0, 6).toUpperCase()}</strong>
+                    <p style="color: #888; font-size: 12px; margin-top: 3px;">${data}</p>
+                  </div>
+                  <span style="background: ${corStatus}; color: white; padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: bold;">
+                    ${textoStatus}
+                  </span>
+                </div>
+                <div style="border-top: 1px solid #2a2a2a; padding-top: 12px;">
+                  ${p.itens.map(function(it) {
+                    return `<p style="color: #ccc; font-size: 14px; margin-bottom: 4px;">${it.qtd}x ${it.nome} — ${formatarPreco(it.subtotal)}</p>`;
+                  }).join("")}
+                </div>
+                <p style="color: #f1c40f; font-size: 20px; font-weight: bold; text-align: right; margin-top: 12px;">
+                  Total: ${formatarPreco(p.total)}
+                </p>
+                <p style="color: #888; font-size: 12px; margin-top: 8px;">
+                  📍 ${p.endereco.rua}, ${p.endereco.numero} - ${p.endereco.bairro}<br>
+                  💳 Pagamento: ${p.formaPagamento}
+                </p>
+              </div>
+            `;
+          });
+          lista.innerHTML = html;
+        })
+        .catch(function(erro) {
+          console.error("Erro ao carregar pedidos:", erro);
+          document.getElementById("listaPedidos").innerHTML =
+            '<p style="text-align: center; color: #c0392b;">Erro: ' + erro.message + '</p>';
+        });
+    }
+  </script>
+
+</body>
+</html>

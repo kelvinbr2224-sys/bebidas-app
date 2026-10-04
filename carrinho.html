@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BebidasApp - Carrinho</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <h1>🛒 Meu Carrinho</h1>
+    <div>
+      <a href="catalogo.html" class="btn-sair" style="text-decoration: none;">← Continuar comprando</a>
+      <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="conteudoCarrinho">
+      <p style="text-align: center; color: #888;">Carregando carrinho...</p>
+    </div>
+
+    <!-- Formulário de endereço (aparece quando tem itens) -->
+    <div id="areaEndereco" style="display: none; margin-top: 30px; background: #1e1e1e; padding: 25px; border-radius: 15px;">
+      <h2 style="color: #f1c40f; margin-bottom: 20px;">📍 Endereço de entrega</h2>
+
+      <div class="form-group">
+        <label>Rua / Avenida</label>
+        <input type="text" id="endRua" placeholder="Ex: Rua das Flores">
+      </div>
+
+      <div class="form-group">
+        <label>Número</label>
+        <input type="text" id="endNumero" placeholder="Ex: 123">
+      </div>
+
+      <div class="form-group">
+        <label>Complemento (opcional)</label>
+        <input type="text" id="endComplemento" placeholder="Ex: Apto 45, Bloco B">
+      </div>
+
+      <div class="form-group">
+        <label>Bairro</label>
+        <input type="text" id="endBairro" placeholder="Ex: Centro">
+      </div>
+
+      <div class="form-group">
+        <label>Observações do pedido (opcional)</label>
+        <textarea id="endObs" rows="2" placeholder="Ex: interfone quebrado, chamar no WhatsApp"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Forma de pagamento</label>
+        <select id="formaPagamento">
+          <option value="PIX">💳 PIX na entrega</option>
+          <option value="Dinheiro">💵 Dinheiro</option>
+          <option value="Cartão">💳 Cartão na entrega</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primario" onclick="finalizarPedido()">✅ Finalizar pedido</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    let produtos = [];
+    let usuarioAtual = null;
+
+    auth.onAuthStateChanged(function(user) {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      usuarioAtual = user;
+      carregarCarrinho();
+    });
+
+    // ========== CARREGAR PRODUTOS DO FIRESTORE ==========
+    function carregarCarrinho() {
+      db.collection("produtos").get().then(function(snapshot) {
+        produtos = [];
+        snapshot.forEach(function(doc) {
+          const p = doc.data();
+          p.id = doc.id;
+          produtos.push(p);
+        });
+        renderizarCarrinho();
+      });
+    }
+
+    // ========== RENDERIZAR CARRINHO ==========
+    function renderizarCarrinho() {
+      const carrinho = JSON.parse(localStorage.getItem("carrinho") || "[]");
+      const conteudo = document.getElementById("conteudoCarrinho");
+      const areaEndereco = document.getElementById("areaEndereco");
+
+      if (carrinho.length === 0) {
+        conteudo.innerHTML = `
+          <div style="text-align: center; padding: 60px 20px;">
+            <p style="font-size: 60px; margin-bottom: 20px;">🛒</p>
+            <p style="color: #888; font-size: 18px; margin-bottom: 20px;">Seu carrinho está vazio</p>
+            <a href="catalogo.html" class="btn btn-primario" style="text-decoration: none; display: inline-block; max-width: 250px;">Ver produtos</a>
+          </div>
+        `;
+        areaEndereco.style.display = "none";
+        return;
+      }
+
+      let html = "";
+      let total = 0;
+
+      carrinho.forEach(function(item) {
+        const produto = produtos.find(function(p) { return p.id === item.id; });
+        if (!produto) return;
+
+        const subtotal = produto.preco * item.qtd;
+        total += subtotal;
+
+        html += `
+          <div style="background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 12px; padding: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+            <div style="font-size: 40px;">${produto.emoji || "🍺"}</div>
+            <div style="flex: 1; min-width: 150px;">
+              <strong style="color: #f5f5f5; display: block;">${produto.nome}</strong>
+              <small style="color: #888;">${formatarPreco(produto.preco)} cada</small>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button onclick="alterarQtd('${produto.id}', -1)" style="background: #2a2a2a; color: #f1c40f; border: none; width: 32px; height: 32px; border-radius: 8px; font-size: 18px; cursor: pointer;">−</button>
+              <span style="color: #f5f5f5; font-weight: bold; min-width: 25px; text-align: center;">${item.qtd}</span>
+              <button onclick="alterarQtd('${produto.id}', 1)" style="background: #2a2a2a; color: #f1c40f; border: none; width: 32px; height: 32px; border-radius: 8px; font-size: 18px; cursor: pointer;">+</button>
+            </div>
+            <div style="color: #f1c40f; font-weight: bold; min-width: 90px; text-align: right;">
+              ${formatarPreco(subtotal)}
+            </div>
+            <button onclick="removerItem('${produto.id}')" style="background: transparent; color: #c0392b; border: none; font-size: 18px; cursor: pointer;" title="Remover">🗑️</button>
+          </div>
+        `;
+      });
+
+      html += `
+        <div style="background: #1e1e1e; border: 2px solid #f1c40f; border-radius: 12px; padding: 20px; margin-top: 20px; text-align: right;">
+          <p style="color: #888; margin-bottom: 5px;">Total do pedido</p>
+          <p style="color: #f1c40f; font-size: 32px; font-weight: bold;">${formatarPreco(total)}</p>
+        </div>
+      `;
+
+      conteudo.innerHTML = html;
+      areaEndereco.style.display = "block";
+    }
+
+    // ========== ALTERAR QUANTIDADE ==========
+    function alterarQtd(produtoId, delta) {
+      let carrinho = JSON.parse(localStorage.getItem("carrinho") || "[]");
+      const item = carrinho.find(function(i) { return i.id === produtoId; });
+      if (!item) return;
+
+      item.qtd += delta;
+      if (item.qtd <= 0) {
+        carrinho = carrinho.filter(function(i) { return i.id !== produtoId; });
+      }
+      localStorage.setItem("carrinho", JSON.stringify(carrinho));
+      renderizarCarrinho();
+    }
+
+    // ========== REMOVER ITEM ==========
+    function removerItem(produtoId) {
+      let carrinho = JSON.parse(localStorage.getItem("carrinho") || "[]");
+      carrinho = carrinho.filter(function(i) { return i.id !== produtoId; });
+      localStorage.setItem("carrinho", JSON.stringify(carrinho));
+      renderizarCarrinho();
+    }
+
+    // ========== FINALIZAR PEDIDO ==========
+    function finalizarPedido() {
+      const carrinho = JSON.parse(localStorage.getItem("carrinho") || "[]");
+
+      if (carrinho.length === 0) {
+        alert("Seu carrinho está vazio!");
+        return;
+      }
+
+      // Valida endereço
+      const rua = document.getElementById("endRua").value.trim();
+      const numero = document.getElementById("endNumero").value.trim();
+      const complemento = document.getElementById("endComplemento").value.trim();
+      const bairro = document.getElementById("endBairro").value.trim();
+      const obs = document.getElementById("endObs").value.trim();
+      const pagamento = document.getElementById("formaPagamento").value;
+
+      if (!rua || !numero || !bairro) {
+        alert("Preencha rua, número e bairro!");
+        return;
+      }
+
+      // Monta itens do pedido
+      const itens = [];
+      let total = 0;
+      carrinho.forEach(function(item) {
+        const produto = produtos.find(function(p) { return p.id === item.id; });
+        if (produto) {
+          itens.push({
+            id: produto.id,
+            nome: produto.nome,
+            preco: produto.preco,
+            qtd: item.qtd,
+            subtotal: produto.preco * item.qtd
+          });
+          total += produto.preco * item.qtd;
+        }
+      });
+
+      // Busca nome do cliente
+      db.collection("clientes").doc(usuarioAtual.uid).get().then(function(doc) {
+        const dadosCliente = doc.exists ? doc.data() : {};
+
+        // Cria o pedido no Firestore
+        return db.collection("pedidos").add({
+          clienteId: usuarioAtual.uid,
+          clienteNome: dadosCliente.nome || "Cliente",
+          clienteTelefone: dadosCliente.telefone || "",
+          clienteEmail: usuarioAtual.email,
+          itens: itens,
+          total: total,
+          endereco: {
+            rua: rua,
+            numero: numero,
+            complemento: complemento,
+            bairro: bairro,
+            observacoes: obs
+          },
+          formaPagamento: pagamento,
+          status: "pendente",
+          criadoEm: new Date().toISOString()
+        });
+      })
+      .then(function() {
+        // Limpa carrinho
+        localStorage.removeItem("carrinho");
+        mostrarToast("Pedido enviado! Aguarde a confirmação.", "sucesso");
+        setTimeout(function() {
+          window.location.href = "pedidos.html";
+        }, 1500);
+      })
+      .catch(function(erro) {
+        console.error(erro);
+        alert("Erro ao enviar pedido: " + erro.message);
+      });
+    }
+  </script>
+
+</body>
+</html>

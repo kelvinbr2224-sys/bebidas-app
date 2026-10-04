@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BebidasApp - Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <h1>⚙️ Admin - Produtos</h1>
+    <div>
+      <a href="admin_pedidos.html" class="btn-sair" style="text-decoration: none;">📋 Pedidos</a>
+      <a href="catalogo.html" class="btn-sair" style="text-decoration: none;">← Catálogo</a>
+      <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div style="background: #1e1e1e; padding: 25px; border-radius: 15px; margin-bottom: 25px;">
+      <h2 style="margin-bottom: 20px; color: #f1c40f;">➕ Novo Produto</h2>
+
+      <div class="form-group">
+        <label>Nome do produto</label>
+        <input type="text" id="prodNome" placeholder="Ex: Cerveja Heineken 600ml">
+      </div>
+
+      <div class="form-group">
+        <label>Descrição</label>
+        <input type="text" id="prodDesc" placeholder="Ex: Garrafa 600ml gelada">
+      </div>
+
+      <div class="form-group">
+        <label>Preço (R$)</label>
+        <input type="number" id="prodPreco" placeholder="Ex: 12.90" step="0.01">
+      </div>
+
+      <div class="form-group">
+        <label>Categoria</label>
+        <select id="prodCategoria">
+          <option value="Cerveja">🍺 Cerveja</option>
+          <option value="Vodka">🥃 Vodka</option>
+          <option value="Whisky">🥃 Whisky</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Emoji (ícone)</label>
+        <input type="text" id="prodEmoji" placeholder="🍺" maxlength="2" value="🍺">
+      </div>
+
+      <button class="btn btn-primario" onclick="cadastrarProduto()">Cadastrar produto</button>
+    </div>
+
+    <h2 style="margin-bottom: 15px;">Produtos cadastrados</h2>
+    <div id="listaProdutos" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">
+      <p style="grid-column: 1/-1; text-align: center; color: #888;">Carregando...</p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    auth.onAuthStateChanged(function(user) {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      carregarProdutos();
+    });
+
+    function cadastrarProduto() {
+      const nome = document.getElementById("prodNome").value.trim();
+      const desc = document.getElementById("prodDesc").value.trim();
+      const preco = parseFloat(document.getElementById("prodPreco").value);
+      const categoria = document.getElementById("prodCategoria").value;
+      const emoji = document.getElementById("prodEmoji").value.trim() || "🍺";
+
+      if (!nome || isNaN(preco) || preco <= 0) {
+        alert("Preencha nome e preço corretamente!");
+        return;
+      }
+
+      db.collection("produtos").add({
+        nome: nome,
+        descricao: desc,
+        preco: preco,
+        categoria: categoria,
+        emoji: emoji,
+        criadoEm: new Date().toISOString()
+      })
+      .then(function() {
+        mostrarToast("Produto cadastrado!", "sucesso");
+        document.getElementById("prodNome").value = "";
+        document.getElementById("prodDesc").value = "";
+        document.getElementById("prodPreco").value = "";
+        carregarProdutos();
+      })
+      .catch(function(erro) {
+        console.error(erro);
+        alert("Erro ao cadastrar: " + erro.message);
+      });
+    }
+
+    function carregarProdutos() {
+      db.collection("produtos").get().then(function(snapshot) {
+        const lista = document.getElementById("listaProdutos");
+        lista.innerHTML = "";
+
+        if (snapshot.empty) {
+          lista.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #888;">Nenhum produto cadastrado ainda.</p>';
+          return;
+        }
+
+        snapshot.forEach(function(doc) {
+          const p = doc.data();
+          const card = document.createElement("div");
+          card.style.cssText = "background: #1e1e1e; border: 1px solid #2a2a2a; border-radius: 12px; padding: 15px;";
+          card.innerHTML = `
+            <div style="font-size: 40px; text-align: center;">${p.emoji || "🍺"}</div>
+            <h3 style="font-size: 15px; margin: 8px 0;">${p.nome}</h3>
+            <p style="color: #888; font-size: 12px;">${p.categoria}</p>
+            <p style="color: #f1c40f; font-size: 18px; font-weight: bold; margin: 8px 0;">${formatarPreco(p.preco)}</p>
+            <button class="btn btn-perigo" onclick="excluirProduto('${doc.id}')">Excluir</button>
+          `;
+          lista.appendChild(card);
+        });
+      });
+    }
+
+    function excluirProduto(id) {
+      if (!confirm("Tem certeza que deseja excluir?")) return;
+      db.collection("produtos").doc(id).delete().then(function() {
+        mostrarToast("Produto excluído", "sucesso");
+        carregarProdutos();
+      });
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BebidasApp - Catálogo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="header">
+    <h1>🍺 BebidasApp</h1>
+    <div>
+      <button class="btn-sair" onclick="irParaCarrinho()">🛒 Carrinho (<span id="qtdCarrinho">0</span>)</button>
+      <button class="btn-sair" onclick="sair()">Sair</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <h2 style="margin-bottom: 15px;">Olá, <span id="nomeUsuario">...</span>!</h2>
+    <p style="color: #888; margin-bottom: 25px;">Escolha suas bebidas favoritas</p>
+
+    <!-- Filtros por categoria -->
+    <div style="margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap;">
+      <button class="aba ativa" onclick="filtrar('todas', this)">Todas</button>
+      <button class="aba" onclick="filtrar('Cerveja', this)">🍺 Cervejas</button>
+      <button class="aba" onclick="filtrar('Vodka', this)">🥃 Vodkas</button>
+      <button class="aba" onclick="filtrar('Whisky', this)">🥃 Whiskys</button>
+    </div>
+
+    <!-- Lista de produtos -->
+    <div id="listaProdutos" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">
+      <p style="grid-column: 1/-1; text-align: center; color: #888;">Carregando produtos...</p>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+    let produtos = [];
+    let categoriaAtual = "todas";
+
+    // ========== EXIGE LOGIN ==========
+    auth.onAuthStateChanged(function(user) {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      // Pega nome do usuário
+      db.collection("clientes").doc(user.uid).get().then(function(doc) {
+        if (doc.exists) {
+          document.getElementById("nomeUsuario").textContent = doc.data().nome;
+        }
+      });
+      // Atualiza contador do carrinho
+      atualizarQtdCarrinho();
+      // Carrega produtos
+      carregarProdutos();
+    });
+
+    // ========== CARREGAR PRODUTOS DO FIRESTORE ==========
+    function carregarProdutos() {
+      db.collection("produtos").get()
+        .then(function(snapshot) {
+          produtos = [];
+          snapshot.forEach(function(doc) {
+            const p = doc.data();
+            p.id = doc.id;
+            produtos.push(p);
+          });
+
+          if (produtos.length === 0) {
+            document.getElementById("listaProdutos").innerHTML =
+              '<p style="grid-column: 1/-1; text-align: center; color: #888;">' +
+              'Nenhum produto cadastrado ainda.<br>' +
+              'Acesse <a href="admin.html" style="color: #f1c40f;">admin.html</a> para cadastrar.' +
+              '</p>';
+            return;
+          }
+
+          renderizarProdutos();
+        })
+        .catch(function(erro) {
+          console.error(erro);
+          document.getElementById("listaProdutos").innerHTML =
+            '<p style="grid-column: 1/-1; text-align: center; color: #c0392b;">' +
+            'Erro ao carregar produtos. Verifique o Console (F12).' +
+            '</p>';
+        });
+    }
+
+    // ========== RENDERIZAR ==========
+    function renderizarProdutos() {
+      const lista = document.getElementById("listaProdutos");
+      lista.innerHTML = "";
+
+      let filtrados = produtos;
+      if (categoriaAtual !== "todas") {
+        filtrados = produtos.filter(function(p) { return p.categoria === categoriaAtual; });
+      }
+
+      if (filtrados.length === 0) {
+        lista.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #888;">Nenhum produto nesta categoria.</p>';
+        return;
+      }
+
+      filtrados.forEach(function(p) {
+        const card = document.createElement("div");
+        card.style.cssText = `
+          background: #1e1e1e;
+          border: 1px solid #2a2a2a;
+          border-radius: 12px;
+          padding: 15px;
+          transition: 0.2s;
+        `;
+        card.innerHTML = `
+          <div style="font-size: 50px; text-align: center; margin-bottom: 10px;">${p.emoji || "🍺"}</div>
+          <h3 style="color: #f5f5f5; font-size: 16px; margin-bottom: 5px;">${p.nome}</h3>
+          <p style="color: #888; font-size: 13px; margin-bottom: 10px;">${p.descricao || ""}</p>
+          <p style="color: #f1c40f; font-size: 20px; font-weight: bold; margin-bottom: 12px;">${formatarPreco(p.preco)}</p>
+          <button class="btn btn-primario" onclick="adicionarAoCarrinho('${p.id}')">Adicionar ao carrinho</button>
+        `;
+        lista.appendChild(card);
+      });
+    }
+
+    // ========== FILTRO ==========
+    function filtrar(categoria, botao) {
+      categoriaAtual = categoria;
+      document.querySelectorAll(".aba").forEach(function(b) { b.classList.remove("ativa"); });
+      botao.classList.add("ativa");
+      renderizarProdutos();
+    }
+
+    // ========== ADICIONAR AO CARRINHO ==========
+    function adicionarAoCarrinho(produtoId) {
+      let carrinho = JSON.parse(localStorage.getItem("carrinho") || "[]");
+      const existente = carrinho.find(function(item) { return item.id === produtoId; });
+      if (existente) {
+        existente.qtd += 1;
+      } else {
+        carrinho.push({ id: produtoId, qtd: 1 });
+      }
+      localStorage.setItem("carrinho", JSON.stringify(carrinho));
+      atualizarQtdCarrinho();
+      mostrarToast("Produto adicionado ao carrinho!", "sucesso");
+    }
+
+    // ========== ATUALIZAR CONTADOR DO CARRINHO ==========
+    function atualizarQtdCarrinho() {
+      const carrinho = JSON.parse(localStorage.getItem("carrinho") || "[]");
+      const total = carrinho.reduce(function(sum, item) { return sum + item.qtd; }, 0);
+      document.getElementById("qtdCarrinho").textContent = total;
+    }
+
+    // ========== IR PARA CARRINHO ==========
+    function irParaCarrinho() {
+      window.location.href = "carrinho.html";
+    }
+  </script>
+
+</body>
+</html>

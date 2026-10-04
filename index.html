@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BebidasApp - Entrar</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="tela-login">
+    <div class="caixa-login">
+      <h1>🍺 BebidasApp</h1>
+      <p class="subtitulo">Delivery de bebidas da sua cidade</p>
+
+      <!-- Abas de Login / Cadastro -->
+      <div class="abas">
+        <button class="aba ativa" id="abaLogin" onclick="trocarAba('login')">Entrar</button>
+        <button class="aba" id="abaCadastro" onclick="trocarAba('cadastro')">Cadastrar</button>
+      </div>
+
+      <!-- Mensagens -->
+      <div class="mensagem-erro" id="msgErro"></div>
+      <div class="mensagem-sucesso" id="msgSucesso"></div>
+
+      <!-- Formulário de LOGIN -->
+      <form id="formLogin" onsubmit="fazerLogin(event)">
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" id="loginEmail" placeholder="seu@email.com" required>
+        </div>
+        <div class="form-group">
+          <label>Senha</label>
+          <input type="password" id="loginSenha" placeholder="••••••••" required minlength="6">
+        </div>
+        <button type="submit" class="btn btn-primario" id="btnLogin">Entrar</button>
+      </form>
+
+      <!-- Formulário de CADASTRO -->
+      <form id="formCadastro" onsubmit="fazerCadastro(event)" style="display:none;">
+        <div class="form-group">
+          <label>Nome completo</label>
+          <input type="text" id="cadNome" placeholder="Seu nome" required>
+        </div>
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" id="cadEmail" placeholder="seu@email.com" required>
+        </div>
+        <div class="form-group">
+          <label>Telefone / WhatsApp</label>
+          <input type="tel" id="cadTelefone" placeholder="(47) 99999-9999" required>
+        </div>
+        <div class="form-group">
+          <label>Senha (mínimo 6 caracteres)</label>
+          <input type="password" id="cadSenha" placeholder="••••••••" required minlength="6">
+        </div>
+        <button type="submit" class="btn btn-primario" id="btnCadastro">Criar conta</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <!-- Seu firebase.js -->
+  <script src="firebase.js"></script>
+
+  <script>
+    // ========== TROCAR ENTRE ABAS LOGIN/CADASTRO ==========
+    function trocarAba(aba) {
+      const abaLogin = document.getElementById("abaLogin");
+      const abaCadastro = document.getElementById("abaCadastro");
+      const formLogin = document.getElementById("formLogin");
+      const formCadastro = document.getElementById("formCadastro");
+
+      limparMensagens();
+
+      if (aba === "login") {
+        abaLogin.classList.add("ativa");
+        abaCadastro.classList.remove("ativa");
+        formLogin.style.display = "block";
+        formCadastro.style.display = "none";
+      } else {
+        abaCadastro.classList.add("ativa");
+        abaLogin.classList.remove("ativa");
+        formCadastro.style.display = "block";
+        formLogin.style.display = "none";
+      }
+    }
+
+    // ========== MOSTRAR MENSAGENS ==========
+    function mostrarErro(texto) {
+      const el = document.getElementById("msgErro");
+      el.textContent = texto;
+      el.style.display = "block";
+      document.getElementById("msgSucesso").style.display = "none";
+    }
+
+    function mostrarSucesso(texto) {
+      const el = document.getElementById("msgSucesso");
+      el.textContent = texto;
+      el.style.display = "block";
+      document.getElementById("msgErro").style.display = "none";
+    }
+
+    function limparMensagens() {
+      document.getElementById("msgErro").style.display = "none";
+      document.getElementById("msgSucesso").style.display = "none";
+    }
+
+    // ========== FAZER LOGIN ==========
+    function fazerLogin(event) {
+      event.preventDefault();
+      limparMensagens();
+
+      const email = document.getElementById("loginEmail").value.trim();
+      const senha = document.getElementById("loginSenha").value;
+      const btn = document.getElementById("btnLogin");
+
+      btn.disabled = true;
+      btn.textContent = "Entrando...";
+
+      auth.signInWithEmailAndPassword(email, senha)
+        .then(function(userCred) {
+          // Redireciona para o catálogo
+          window.location.href = "catalogo.html";
+        })
+        .catch(function(erro) {
+          btn.disabled = false;
+          btn.textContent = "Entrar";
+          mostrarErro(traduzirErro(erro.code));
+        });
+    }
+
+    // ========== FAZER CADASTRO ==========
+    function fazerCadastro(event) {
+      event.preventDefault();
+      limparMensagens();
+
+      const nome = document.getElementById("cadNome").value.trim();
+      const email = document.getElementById("cadEmail").value.trim();
+      const telefone = document.getElementById("cadTelefone").value.trim();
+      const senha = document.getElementById("cadSenha").value;
+      const btn = document.getElementById("btnCadastro");
+
+      btn.disabled = true;
+      btn.textContent = "Criando conta...";
+
+      auth.createUserWithEmailAndPassword(email, senha)
+        .then(function(userCred) {
+          const user = userCred.user;
+
+          // Salva os dados extras no Firestore
+          return db.collection("clientes").doc(user.uid).set({
+            nome: nome,
+            email: email,
+            telefone: telefone,
+            criadoEm: new Date().toISOString(),
+            tipo: "cliente"
+          });
+        })
+        .then(function() {
+          mostrarSucesso("Conta criada com sucesso! Redirecionando...");
+          setTimeout(function() {
+            window.location.href = "catalogo.html";
+          }, 1200);
+        })
+        .catch(function(erro) {
+          btn.disabled = false;
+          btn.textContent = "Criar conta";
+          mostrarErro(traduzirErro(erro.code));
+        });
+    }
+
+    // ========== TRADUZIR ERROS DO FIREBASE ==========
+    function traduzirErro(codigo) {
+      const erros = {
+        "auth/email-already-in-use": "Este e-mail já está cadastrado.",
+        "auth/invalid-email": "E-mail inválido.",
+        "auth/weak-password": "A senha precisa ter pelo menos 6 caracteres.",
+        "auth/user-not-found": "Usuário não encontrado.",
+        "auth/wrong-password": "Senha incorreta.",
+        "auth/invalid-credential": "E-mail ou senha incorretos.",
+        "auth/too-many-requests": "Muitas tentativas. Aguarde um pouco.",
+        "auth/network-request-failed": "Sem conexão com a internet."
+      };
+      return erros[codigo] || "Erro: " + codigo;
+    }
+
+    // ========== SE JÁ ESTIVER LOGADO, VAI DIRETO PRO CATÁLOGO ==========
+    auth.onAuthStateChanged(function(user) {
+      if (user) {
+        window.location.href = "catalogo.html";
+      }
+    });
+  </script>
+
+</body>
+</html>
